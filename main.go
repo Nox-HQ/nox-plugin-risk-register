@@ -28,19 +28,16 @@ var (
 	reDeprecatedJS     = regexp.MustCompile(`(?i)(document\.write\(|escape\(|unescape\(|__proto__|Object\.observe|\.substr\()`)
 
 	// RISK-003: Single point of failure patterns.
-	reSingleDBConn     = regexp.MustCompile(`(?i)(sql\.Open\(|connect\(|createConnection\(|MongoClient\()`)
-	reNoPooling        = regexp.MustCompile(`(?i)(SetMaxOpenConns|pool|Pool|createPool|ConnectionPool|pool_size)`)
-	reNoFallback       = regexp.MustCompile(`(?i)(fallback|failover|replica|secondary|backup|standby|redundan)`)
-	reSingleEndpoint   = regexp.MustCompile(`(?i)(http\.Get\(|requests\.get\(|fetch\(|axios\.(get|post)\()`)
-	reRetryOrFallback  = regexp.MustCompile(`(?i)(retry|fallback|circuit.?breaker|failover|backup.?url|secondary.?url|replica)`)
-
+	reSingleDBConn = regexp.MustCompile(`(?i)(sql\.Open\(|connect\(|createConnection\(|MongoClient\()`)
+	reNoPooling    = regexp.MustCompile(`(?i)(SetMaxOpenConns|pool|Pool|createPool|ConnectionPool|pool_size)`)
+	reNoFallback   = regexp.MustCompile(`(?i)(fallback|failover|replica|secondary|backup|standby|redundan)`)
 	// RISK-004: Missing error recovery mechanisms.
 	reExternalCall   = regexp.MustCompile(`(?i)(http\.Get|http\.Post|http\.Do|requests\.(get|post|put|delete)|fetch\(|axios\.|grpc\.|\.Dial\(|\.Connect\()`)
 	reRetryMechanism = regexp.MustCompile(`(?i)(retry|backoff|circuit.?breaker|resilience|polly|tenacity|retrying|go-retryablehttp|hashicorp/go-retryablehttp|sony/gobreaker|afex/hystrix)`)
 
 	// RISK-005: Code complexity indicators.
 	reNestedConditional = regexp.MustCompile(`^(\s+)(if\s|for\s|while\s|switch\s|case\s|select\s)`)
-	reFuncStart         = regexp.MustCompile(`(?i)^(func\s|def\s|function\s|const\s+\w+\s*=\s*\(|^\s*(public|private|protected)\s+(static\s+)?[\w<>\[\]]+\s+\w+\s*\()`)
+	reFuncStart         = regexp.MustCompile(`(?i)^(func\s|def\s|function\s|const\s+\w+\s*=\s*\(|\s*(public|private|protected)\s+(static\s+)?[\w<>\[\]]+\s+\w+\s*\()`)
 )
 
 // sourceExtensions lists file extensions to scan.
@@ -141,12 +138,12 @@ func handleScan(ctx context.Context, req sdk.ToolRequest) (*pluginv1.InvokeToolR
 }
 
 // scanFileForRisks scans a single source file for risk indicators.
-func scanFileForRisks(resp *sdk.ResponseBuilder, rc *riskContext, filePath string, ext string) {
+func scanFileForRisks(resp *sdk.ResponseBuilder, rc *riskContext, filePath, ext string) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNum := 0
@@ -281,7 +278,7 @@ func checkSecurityDebt(resp *sdk.ResponseBuilder, filePath string, lineNum int, 
 }
 
 // checkDeprecatedAPI checks for RISK-002: deprecated API usage.
-func checkDeprecatedAPI(resp *sdk.ResponseBuilder, filePath string, lineNum int, line string, ext string) {
+func checkDeprecatedAPI(resp *sdk.ResponseBuilder, filePath string, lineNum int, line, ext string) {
 	var matched bool
 	var detail string
 
@@ -348,12 +345,17 @@ func emitWorkspaceRisks(resp *sdk.ResponseBuilder, rc *riskContext) {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	srv := buildServer()
 	if err := srv.Serve(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "nox-plugin-risk-register: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }

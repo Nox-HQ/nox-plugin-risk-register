@@ -18,13 +18,13 @@ func readFile() {
 	_ = data
 }
 
-// Single DB connection without pooling — triggers RISK-003.
+// Single DB connection — triggers RISK-003.
 func connectDB() {
 	db, _ := sql.Open("postgres", "postgres://localhost/mydb")
 	_ = db
 }
 
-// External call without retry — triggers RISK-004.
+// External call — triggers RISK-004.
 func callService() {
 	resp, _ := http.Get("https://api.example.com/data")
 	_ = resp
